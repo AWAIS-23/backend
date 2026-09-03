@@ -4,6 +4,11 @@ from pydantic import BaseModel, Field
 from app.core.constants import UserRole, OrgRole
 from app.core.exceptions import InvalidTokenException
 
+# Algorithms supported for Supabase JWT verification.
+# - HS256: legacy symmetric tokens (signed with SUPABASE_JWT_SECRET)
+# - ES256: current asymmetric tokens (signed with ECDSA, verified via JWKS)
+SUPPORTED_ALGORITHMS = ["HS256", "ES256"]
+
 
 class AuthenticatedUser(BaseModel):
     """Immutable identity representation derived strictly from verified Supabase JWT claims."""
@@ -22,33 +27,76 @@ def verify_supabase_jwt(
     secret: str,
     algorithms: list[str] | None = None,
     verify_aud: bool = True,
+    jwks_url: str | None = None,
 ) -> AuthenticatedUser:
     """
     Decodes and validates a Supabase JWT.
-    
+
+    Supports two signing regimes:
+    - **ES256** (current): asymmetric ECDSA tokens. The public key is fetched
+      from Supabase's JWKS endpoint (``jwks_url``) and selected via the token's
+      ``kid`` header. This is what Supabase Auth issues by default now.
+    - **HS256** (legacy): symmetric HMAC tokens signed with ``secret``
+      (``SUPABASE_JWT_SECRET``). Retained for backward compatibility and tests.
+
     Security:
-    - Enforces signature verification against SUPABASE_JWT_SECRET.
+    - Enforces signature verification (never decodes without it).
     - Rejects expired tokens.
     - Never trusts arbitrary client claims without cryptographic verification.
     """
-    if not token or not secret:
+    if not token:
         raise InvalidTokenException("Missing authentication token or verification secret.")
 
     if algorithms is None:
-        algorithms = ["HS256"]
+        algorithms = SUPPORTED_ALGORITHMS
 
+    # Peek at the header (unverified) to pick the right verification strategy.
     try:
-        payload = jwt.decode(
-            token,
-            secret,
-            algorithms=algorithms,
-            audience="authenticated" if verify_aud else None,
-            options={"verify_aud": verify_aud},
-        )
-    except jwt.ExpiredSignatureError:
-        raise InvalidTokenException("Authentication token has expired.")
+        unverified_header = jwt.get_unverified_header(token)
     except jwt.InvalidTokenError as exc:
         raise InvalidTokenException(f"Invalid authentication token: {str(exc)}")
+
+    token_alg = unverified_header.get("alg")
+
+    if token_alg == "ES256":
+        # Asymmetric verification via JWKS public key.
+        if not jwks_url:
+            raise InvalidTokenException(
+                "ES256 token received but JWKS URL is not configured. "
+                "Set SUPABASE_URL or SUPABASE_JWKS_URL."
+            )
+        try:
+            from jwt import PyJWKClient
+
+            jwks_client = PyJWKClient(jwks_url)
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["ES256"],
+                audience="authenticated" if verify_aud else None,
+                options={"verify_aud": verify_aud},
+            )
+        except jwt.ExpiredSignatureError:
+            raise InvalidTokenException("Authentication token has expired.")
+        except jwt.InvalidTokenError as exc:
+            raise InvalidTokenException(f"Invalid authentication token: {str(exc)}")
+    else:
+        # Symmetric (HS256) verification with the JWT secret.
+        if not secret:
+            raise InvalidTokenException("Missing verification secret for HS256 token.")
+        try:
+            payload = jwt.decode(
+                token,
+                secret,
+                algorithms=["HS256"],
+                audience="authenticated" if verify_aud else None,
+                options={"verify_aud": verify_aud},
+            )
+        except jwt.ExpiredSignatureError:
+            raise InvalidTokenException("Authentication token has expired.")
+        except jwt.InvalidTokenError as exc:
+            raise InvalidTokenException(f"Invalid authentication token: {str(exc)}")
 
     user_id = payload.get("sub")
     if not user_id:

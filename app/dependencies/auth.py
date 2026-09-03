@@ -32,4 +32,5 @@ async def get_current_user(
         token=token,
         secret=settings.SUPABASE_JWT_SECRET,
         verify_aud=False if settings.APP_ENV == "testing" else True,
+        jwks_url=settings.jwks_url,
     )
