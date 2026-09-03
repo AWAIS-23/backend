@@ -16,11 +16,19 @@ class ProfileService:
         self,
         profile_id: uuid.UUID,
         default_role: str = "learner",
+        seed_full_name: str | None = None,
+        seed_avatar_url: str | None = None,
     ) -> Profile:
         """
         Retrieves user profile, automatically initializing on first authenticated login.
+        Seeds full_name/avatar_url from Supabase user_metadata when creating a new profile.
         """
-        profile = await self.profile_repo.get_or_create(profile_id, default_role=default_role)
+        profile = await self.profile_repo.get_or_create(
+            profile_id,
+            default_role=default_role,
+            seed_full_name=seed_full_name,
+            seed_avatar_url=seed_avatar_url,
+        )
         return profile
 
     async def get_profile(self, profile_id: uuid.UUID) -> Profile:

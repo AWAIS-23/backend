@@ -23,6 +23,8 @@ async def get_my_profile(
     profile = await profile_service.get_or_initialize_profile(
         profile_id=uuid.UUID(current_user.id),
         default_role=current_user.role.value,
+        seed_full_name=current_user.full_name,
+        seed_avatar_url=current_user.avatar_url,
     )
     return ProfileResponse.model_validate(profile)
 

@@ -15,6 +15,8 @@ class AuthenticatedUser(BaseModel):
     id: str = Field(..., description="Supabase auth UUID (sub claim)")
     email: str | None = None
     role: UserRole = Field(default=UserRole.LEARNER, description="Global platform role")
+    full_name: str | None = Field(default=None, description="Display name from Supabase user_metadata")
+    avatar_url: str | None = Field(default=None, description="Avatar URL from Supabase user_metadata")
     org_roles: dict[str, OrgRole] = Field(
         default_factory=dict,
         description="Mapping of organization_id to OrgRole"
@@ -128,6 +130,8 @@ def verify_supabase_jwt(
         id=user_id,
         email=payload.get("email") or user_metadata.get("email"),
         role=role,
+        full_name=user_metadata.get("full_name") or user_metadata.get("name"),
+        avatar_url=user_metadata.get("avatar_url"),
         org_roles=org_roles,
         raw_claims=payload,
     )

@@ -2,10 +2,25 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 from app.dependencies.services import get_skill_service
 from app.schemas.common import PaginatedResponse
-from app.schemas.skill import SkillResponse
+from app.schemas.skill import SkillResponse, SkillCreate
 from app.services.skill_service import SkillService
 
 router = APIRouter(prefix="/skills", tags=["Skills Taxonomy"])
+
+
+@router.post(
+    "",
+    response_model=SkillResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new skill",
+    description="Creates a new skill in the taxonomy. Requires name and category. Optionally specify parent skill.",
+)
+async def create_skill(
+    data: SkillCreate,
+    skill_service: SkillService = Depends(get_skill_service),
+) -> SkillResponse:
+    skill = await skill_service.create_skill(data)
+    return SkillResponse.model_validate(skill)
 
 
 @router.get(

@@ -95,10 +95,20 @@ def create_mock_jwt(
     email: str = "learner@example.com",
     role: UserRole = UserRole.LEARNER,
     org_roles: dict[str, str] | None = None,
+    full_name: str | None = None,
+    avatar_url: str | None = None,
     secret: str = "test-jwt-secret-1234567890-test-secret-32bytes",
     expires_in_seconds: int = 3600,
 ) -> str:
     """Helper to generate signed test JWTs mimicking Supabase Auth."""
+    user_metadata: dict = {
+        "email": email,
+        "role": role.value,
+    }
+    if full_name is not None:
+        user_metadata["full_name"] = full_name
+    if avatar_url is not None:
+        user_metadata["avatar_url"] = avatar_url
     payload = {
         "sub": user_id,
         "email": email,
@@ -109,10 +119,7 @@ def create_mock_jwt(
             "role": role.value,
             "org_roles": org_roles or {},
         },
-        "user_metadata": {
-            "email": email,
-            "role": role.value,
-        },
+        "user_metadata": user_metadata,
     }
     return jwt.encode(payload, secret, algorithm="HS256")
 
