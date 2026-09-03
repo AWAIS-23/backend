@@ -7,13 +7,32 @@ from app.dependencies.services import (
     get_assessment_attempt_service,
     get_assessment_service,
 )
-from app.schemas.assessment import AssessmentDetailPublic, AssessmentPublic
+from app.schemas.assessment import AssessmentCreate, AssessmentDetailPublic, AssessmentPublic
 from app.schemas.assessment_attempt import AttemptStartResponse
 from app.schemas.common import PaginatedResponse
 from app.services.assessment_attempt_service import AssessmentAttemptService
 from app.services.assessment_service import AssessmentService
 
 router = APIRouter(prefix="/assessments", tags=["Assessments"])
+
+
+@router.post(
+    "",
+    response_model=AssessmentPublic,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new assessment",
+    description="Creates a new assessment with questions. Requires authentication.",
+)
+async def create_assessment(
+    data: AssessmentCreate,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    assessment_service: AssessmentService = Depends(get_assessment_service),
+) -> AssessmentPublic:
+    assessment = await assessment_service.create_assessment(
+        creator_id=uuid.UUID(current_user.id),
+        data=data,
+    )
+    return AssessmentPublic.model_validate(assessment)
 
 
 @router.get(
