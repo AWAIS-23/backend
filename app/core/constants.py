@@ -83,6 +83,7 @@ class EvidenceStatus(StrEnum):
 class EvidenceSourceType(StrEnum):
     ASSESSMENT = "assessment"
     CHALLENGE_SUBMISSION = "challenge_submission"
+    SELF_REPORTED = "self_reported"
 
 
 class AttemptStatus(StrEnum):

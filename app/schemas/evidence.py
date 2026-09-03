@@ -1,8 +1,14 @@
 import uuid
 from datetime import datetime
 from typing import Any
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from app.core.constants import EvidenceSourceType, EvidenceStatus
+
+
+class SelfReportClaimCreate(BaseModel):
+    skill_id: uuid.UUID = Field(..., description="Skill being claimed by the learner")
+    proficiency: str | None = Field(default=None, max_length=50, description="Self-declared proficiency level")
+    notes: str | None = Field(default=None, max_length=2000, description="Optional supporting notes")
 
 
 class EvidencePublic(BaseModel):

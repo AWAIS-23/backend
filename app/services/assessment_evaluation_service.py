@@ -7,6 +7,7 @@ from app.models.assessment_result import AssessmentResult
 from app.repositories.assessment_attempt_repo import AssessmentAttemptRepository
 from app.repositories.assessment_result_repo import AssessmentResultRepository
 from app.schemas.assessment_result import AssessmentResultResponse
+from app.services.evidence_service import EvidenceService
 
 logger = logging.getLogger("rising_skills.services.evaluation")
 
@@ -16,9 +17,11 @@ class AssessmentEvaluationService:
         self,
         attempt_repo: AssessmentAttemptRepository,
         result_repo: AssessmentResultRepository,
+        evidence_service: EvidenceService,
     ):
         self.attempt_repo = attempt_repo
         self.result_repo = result_repo
+        self.evidence_service = evidence_service
 
     async def submit_and_evaluate(
         self,
@@ -92,6 +95,16 @@ class AssessmentEvaluationService:
         attempt.status = AttemptStatus.SUBMITTED
         attempt.submitted_at = now_utc
         await self.attempt_repo.session.flush()
+
+        # Generate skill evidence from this assessment result
+        if attempt.assessment.skill_id:
+            await self.evidence_service.create_assessment_evidence(
+                profile_id=profile_id,
+                skill_id=attempt.assessment.skill_id,
+                assessment_result_id=created_result.id,
+                score=score_percentage,
+                passed=passed,
+            )
 
         logger.info(
             f"Attempt '{attempt_id}' evaluated: Score {earned_points}/{total_points} ({score_percentage}%), Passed: {passed}"

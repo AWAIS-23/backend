@@ -64,6 +64,42 @@ class EvidenceService:
 
         return evidence
 
+    async def create_self_reported_claim(
+        self,
+        profile_id: uuid.UUID,
+        skill_id: uuid.UUID,
+        proficiency: str | None = None,
+        notes: str | None = None,
+    ) -> Evidence:
+        """
+        Creates a self-reported skill claim by the learner (a profile-level claim,
+        not derived from any assessment or submission). Status starts as UNVERIFIED
+        and can only move forward through the human verification workflow.
+        """
+        existing = await self.evidence_repo.find_self_reported(
+            profile_id=profile_id,
+            skill_id=skill_id,
+        )
+        if existing:
+            return existing
+
+        evidence = Evidence(
+            profile_id=profile_id,
+            skill_id=skill_id,
+            source_type=EvidenceSourceType.SELF_REPORTED,
+            source_id=profile_id,
+            score=0.0,
+            evidence_data={
+                "self_reported": True,
+                "proficiency": proficiency,
+                "notes": notes,
+            },
+            status=EvidenceStatus.UNVERIFIED,
+        )
+        created = await self.evidence_repo.create(evidence)
+        logger.info(f"Self-reported skill claim '{created.id}' created for user '{profile_id}' (Skill: '{skill_id}').")
+        return created
+
     async def create_assessment_evidence(
         self,
         profile_id: uuid.UUID,

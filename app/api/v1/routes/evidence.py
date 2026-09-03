@@ -4,10 +4,31 @@ from app.core.security import AuthenticatedUser
 from app.dependencies.auth import get_current_user
 from app.dependencies.services import get_evidence_service
 from app.schemas.common import PaginatedResponse
-from app.schemas.evidence import EvidencePublic
+from app.schemas.evidence import EvidencePublic, SelfReportClaimCreate
 from app.services.evidence_service import EvidenceService
 
 router = APIRouter(prefix="/evidence", tags=["Skill Evidence"])
+
+
+@router.post(
+    "/self-report",
+    response_model=EvidencePublic,
+    status_code=status.HTTP_201_CREATED,
+    summary="Self-report a skill claim",
+    description="Allows the authenticated learner to add a skill to their profile as a self-reported claim (unverified until reviewed).",
+)
+async def self_report_claim(
+    data: SelfReportClaimCreate,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    evidence_service: EvidenceService = Depends(get_evidence_service),
+) -> EvidencePublic:
+    evidence = await evidence_service.create_self_reported_claim(
+        profile_id=uuid.UUID(current_user.id),
+        skill_id=data.skill_id,
+        proficiency=data.proficiency,
+        notes=data.notes,
+    )
+    return EvidencePublic.model_validate(evidence)
 
 
 @router.get(

@@ -59,3 +59,17 @@ class EvidenceRepository(BaseRepository[Evidence]):
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def find_self_reported(
+        self,
+        profile_id: uuid.UUID,
+        skill_id: uuid.UUID,
+    ) -> Evidence | None:
+        from app.core.constants import EvidenceSourceType
+        stmt = select(Evidence).where(
+            Evidence.profile_id == profile_id,
+            Evidence.skill_id == skill_id,
+            Evidence.source_type == EvidenceSourceType.SELF_REPORTED,
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
