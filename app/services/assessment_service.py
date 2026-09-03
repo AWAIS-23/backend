@@ -31,10 +31,16 @@ class AssessmentService:
         page: int = 1,
         page_size: int = 20,
         user_role: UserRole = UserRole.LEARNER,
+        status_override: AssessmentStatus | None = None,
     ) -> PaginatedResponse[AssessmentPublic]:
         skip = (page - 1) * page_size
-        # Learners only see PUBLISHED assessments; Admins can see all
-        status_filter = AssessmentStatus.PUBLISHED if user_role == UserRole.LEARNER else None
+        # Use explicit status override if provided; otherwise learners only see PUBLISHED
+        if status_override is not None:
+            status_filter = status_override
+        elif user_role == UserRole.LEARNER:
+            status_filter = AssessmentStatus.PUBLISHED
+        else:
+            status_filter = None
 
         items, total = await self.assessment_repo.list_assessments(
             skill_id=skill_id,

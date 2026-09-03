@@ -1,6 +1,6 @@
 import uuid
 from fastapi import APIRouter, Depends, Query, status
-from app.core.constants import UserRole
+from app.core.constants import AssessmentStatus, UserRole
 from app.core.security import AuthenticatedUser
 from app.dependencies.auth import get_current_user
 from app.dependencies.services import (
@@ -40,23 +40,30 @@ async def create_assessment(
     response_model=PaginatedResponse[AssessmentPublic],
     status_code=status.HTTP_200_OK,
     summary="List available skill assessments",
-    description="Returns a paginated list of published skill assessments with optional skill, role, and keyword search filters.",
+    description="Returns a paginated list of skill assessments with optional skill, role, status, and keyword search filters. Learners only see published assessments unless an explicit status filter is provided.",
 )
 async def list_assessments(
     skill_id: uuid.UUID | None = Query(default=None, description="Filter by target skill ID"),
     role_id: uuid.UUID | None = Query(default=None, description="Filter by career role ID"),
     search: str | None = Query(default=None, description="Search keyword in assessment title"),
+    assessment_status: AssessmentStatus | None = Query(default=None, alias="status", description="Filter by assessment status (draft, published, archived). If omitted, learners see only published."),
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     assessment_service: AssessmentService = Depends(get_assessment_service),
 ) -> PaginatedResponse[AssessmentPublic]:
+    # If an explicit status filter is provided, use it; otherwise default by role
+    effective_status = assessment_status if assessment_status is not None else (
+        AssessmentStatus.PUBLISHED if current_user.role == UserRole.LEARNER else None
+    )
     return await assessment_service.list_assessments(
         skill_id=skill_id,
         role_id=role_id,
         search=search,
         page=page,
         page_size=page_size,
-        user_role=UserRole.LEARNER,
+        user_role=current_user.role,
+        status_override=effective_status,
     )
 
 
