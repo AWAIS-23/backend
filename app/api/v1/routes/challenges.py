@@ -2,6 +2,7 @@ import uuid
 from typing import Sequence
 from fastapi import APIRouter, Depends, Query, status
 from app.core.constants import ChallengeStatus, UserRole
+from app.core.exceptions import PermissionDeniedException
 from app.core.security import AuthenticatedUser
 from app.dependencies.auth import get_current_user, get_optional_current_user
 from app.dependencies.roles import require_role
@@ -39,8 +40,15 @@ async def list_challenges(
     challenge_service: ChallengeService = Depends(get_challenge_service),
 ) -> PaginatedResponse[ChallengePublic]:
     user_role = current_user.role if current_user else UserRole.LEARNER
+    
+    # Data isolation: Employers can only see their own challenges
+    created_by_filter = None
+    if user_role == UserRole.EMPLOYER and current_user:
+        created_by_filter = uuid.UUID(current_user.id)
+    
     return await challenge_service.list_challenges(
         organization_id=organization_id,
+        created_by=created_by_filter,
         search=search,
         page=page,
         page_size=page_size,
@@ -61,6 +69,14 @@ async def create_challenge(
     current_user: AuthenticatedUser = Depends(require_role([UserRole.EMPLOYER, UserRole.ADMIN])),
     challenge_service: ChallengeService = Depends(get_challenge_service),
 ) -> ChallengePublic:
+    # Determine employer's organization ID from auth info
+    if not getattr(current_user, "org_roles", {}):
+        raise PermissionDeniedException("Employer has no associated organization.")
+    # Use the first organization the employer belongs to (could be extended to select specific org)
+    org_uuid = uuid.UUID(next(iter(current_user.org_roles)))
+    # Ensure payload carries the correct organization_id (override client-provided value)
+    payload = payload.model_copy(update={"organization_id": org_uuid})
+
     created = await challenge_service.create_challenge(
         creator_id=uuid.UUID(current_user.id),
         data=payload,

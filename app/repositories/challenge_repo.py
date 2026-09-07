@@ -1,6 +1,6 @@
 import uuid
 from typing import Sequence
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.core.constants import ChallengeStatus
@@ -17,7 +17,9 @@ class ChallengeRepository(BaseRepository[Challenge]):
         self,
         status: ChallengeStatus | None = ChallengeStatus.PUBLISHED,
         organization_id: uuid.UUID | None = None,
+        created_by: uuid.UUID | None = None,
         search: str | None = None,
+        skill_ids: list[uuid.UUID] | None = None,
         skip: int = 0,
         limit: int = 20,
     ) -> tuple[Sequence[Challenge], int]:
@@ -25,9 +27,23 @@ class ChallengeRepository(BaseRepository[Challenge]):
         if status is not None:
             filters.append(Challenge.status == status)
         if organization_id is not None:
+            # Filter by organization_id directly from challenges table
             filters.append(Challenge.organization_id == organization_id)
+        if created_by is not None:
+            # Filter by creator
+            filters.append(Challenge.created_by == created_by)
         if search:
             filters.append(Challenge.title.ilike(f"%{search.strip()}%"))
+        if skill_ids:
+            # Join with ChallengeSkill to ensure challenge has at least one of the requested skill IDs
+            subq = (
+                select(ChallengeSkill.id)
+                .where(
+                    (ChallengeSkill.challenge_id == Challenge.id) &
+                    (ChallengeSkill.skill_id.in_(skill_ids))
+                )
+            )
+            filters.append(exists(subq))
 
         count_stmt = select(func.count()).select_from(Challenge)
         if filters:

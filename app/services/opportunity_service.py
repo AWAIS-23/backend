@@ -43,6 +43,17 @@ class OpportunityService:
         user_role: UserRole = UserRole.LEARNER,
     ) -> PaginatedResponse[OpportunityPublic]:
         skip = (page - 1) * page_size
+
+        # Defense-in-depth: Never allow an employer to list opportunities without organization scope
+        if user_role == UserRole.EMPLOYER and organization_id is None:
+            return PaginatedResponse[OpportunityPublic](
+                items=[],
+                total=0,
+                page=page,
+                page_size=page_size,
+                pages=1,
+            )
+
         # Learners only see PUBLISHED opportunities; Admins/Employers can see all when queried
         status_filter = OpportunityStatus.PUBLISHED if user_role == UserRole.LEARNER else None
 

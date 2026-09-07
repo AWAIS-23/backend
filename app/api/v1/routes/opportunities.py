@@ -44,17 +44,37 @@ async def list_opportunities(
     current_user: AuthenticatedUser | None = Depends(get_optional_current_user),
     opportunity_service: OpportunityService = Depends(get_opportunity_service),
 ) -> PaginatedResponse[OpportunityPublic]:
+    user_role = (
+        current_user.role
+        if current_user and current_user.role in (UserRole.EMPLOYER, UserRole.ADMIN)
+        else UserRole.LEARNER
+    )
+    
+    # Data isolation: Employers can only see their own organization's opportunities
+    if user_role == UserRole.EMPLOYER and current_user:
+        if current_user.org_roles:
+            if organization_id and str(organization_id) in current_user.org_roles:
+                user_org_id = str(organization_id)
+            elif organization_id and str(organization_id) not in current_user.org_roles:
+                # Access denied to foreign organization: prevent data leakage
+                user_org_id = None
+                organization_id = uuid.UUID(int=0)
+            else:
+                user_org_id = next(iter(current_user.org_roles.keys()), None)
+
+            if user_org_id:
+                organization_id = uuid.UUID(user_org_id)
+        else:
+            # Employer does not belong to any organization yet -> prevent data leakage
+            organization_id = uuid.UUID(int=0)
+    
     return await opportunity_service.list_opportunities(
         organization_id=organization_id,
         search=search,
         opportunity_type=opportunity_type,
         page=page,
         page_size=page_size,
-        user_role=(
-            current_user.role
-            if current_user and current_user.role in (UserRole.EMPLOYER, UserRole.ADMIN)
-            else UserRole.LEARNER
-        ),
+        user_role=user_role,
     )
 
 

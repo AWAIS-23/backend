@@ -28,6 +28,7 @@ class AssessmentService:
         self,
         skill_id: uuid.UUID | None = None,
         role_id: uuid.UUID | None = None,
+        created_by: uuid.UUID | None = None,
         search: str | None = None,
         page: int = 1,
         page_size: int = 20,
@@ -46,6 +47,7 @@ class AssessmentService:
         items, total = await self.assessment_repo.list_assessments(
             skill_id=skill_id,
             role_id=role_id,
+            created_by=created_by,
             status=status_filter,
             search=search,
             skip=skip,

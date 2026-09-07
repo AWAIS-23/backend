@@ -83,6 +83,23 @@ def verify_supabase_jwt(
             raise InvalidTokenException("Authentication token has expired.")
         except jwt.InvalidTokenError as exc:
             raise InvalidTokenException(f"Invalid authentication token: {str(exc)}")
+        except Exception as exc:
+            # Fallback to JWT secret if JWKS fails (network issues in development)
+            if secret:
+                try:
+                    payload = jwt.decode(
+                        token,
+                        secret,
+                        algorithms=["HS256"],
+                        audience="authenticated" if verify_aud else None,
+                        options={"verify_aud": verify_aud},
+                    )
+                except jwt.ExpiredSignatureError:
+                    raise InvalidTokenException("Authentication token has expired.")
+                except jwt.InvalidTokenError as jwt_exc:
+                    raise InvalidTokenException(f"Invalid authentication token: {str(jwt_exc)}")
+            else:
+                raise InvalidTokenException(f"Failed to verify ES256 token and no JWT secret available: {str(exc)}")
     else:
         # Symmetric (HS256) verification with the JWT secret.
         if not secret:

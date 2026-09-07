@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from app.core.constants import UserRole
 from app.core.security import AuthenticatedUser
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, get_optional_current_user
 from app.dependencies.roles import require_role
 from app.dependencies.services import get_organization_service
 from app.schemas.organization import (
@@ -43,9 +43,12 @@ async def create_organization(
     description="Returns organizations where the authenticated user is a member.",
 )
 async def list_my_organizations(
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser | None = Depends(get_optional_current_user),
     org_service: OrganizationService = Depends(get_organization_service),
 ) -> list[OrganizationResponse]:
+    if not current_user:
+        # Unauthenticated request, return empty list
+        return []
     orgs = await org_service.list_user_organizations(user_id=uuid.UUID(current_user.id))
     return [OrganizationResponse.model_validate(o) for o in orgs]
 

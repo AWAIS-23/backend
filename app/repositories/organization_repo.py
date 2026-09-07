@@ -59,3 +59,10 @@ class OrganizationRepository(BaseRepository[Organization]):
         )
         result = await self.session.execute(stmt)
         return result.scalars().all()
+
+    async def get_org_roles_for_profile(self, profile_id: uuid.UUID) -> dict[str, OrgRole]:
+        stmt = select(OrganizationMember.organization_id, OrganizationMember.org_role).where(
+            OrganizationMember.profile_id == profile_id
+        )
+        result = await self.session.execute(stmt)
+        return {str(row[0]): row[1] for row in result.all()}

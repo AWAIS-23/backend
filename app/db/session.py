@@ -25,9 +25,9 @@ def get_engine() -> AsyncEngine:
             "future": True,
         }
         
-        # Supabase's session pooler has a small connection limit. A persistent
-        # application pool can exhaust it during reloads or multiple workers.
-        if "pooler.supabase.com" in settings.DATABASE_URL:
+        # Supabase's pooler (both session mode :5432 and transaction mode :6543)
+        # requires NullPool so SQLAlchemy doesn't hold idle connections open.
+        if "pooler.supabase.com" in settings.DATABASE_URL or "6543" in settings.DATABASE_URL:
             engine_kwargs["poolclass"] = NullPool
         # SQLite vs PostgreSQL pool configuration
         elif "sqlite" in settings.DATABASE_URL:

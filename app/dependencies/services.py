@@ -109,7 +109,8 @@ def get_assessment_attempt_service(session: AsyncSession = Depends(get_db)) -> A
 def get_assessment_evaluation_service(session: AsyncSession = Depends(get_db)) -> AssessmentEvaluationService:
     attempt_repo = AssessmentAttemptRepository(session)
     result_repo = AssessmentResultRepository(session)
-    return AssessmentEvaluationService(attempt_repo, result_repo)
+    evidence_service = get_evidence_service(session)
+    return AssessmentEvaluationService(attempt_repo, result_repo, evidence_service)
 
 
 def get_challenge_service(session: AsyncSession = Depends(get_db)) -> ChallengeService:

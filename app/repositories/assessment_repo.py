@@ -17,6 +17,7 @@ class AssessmentRepository(BaseRepository[Assessment]):
         self,
         skill_id: uuid.UUID | None = None,
         role_id: uuid.UUID | None = None,
+        created_by: uuid.UUID | None = None,
         status: AssessmentStatus | None = AssessmentStatus.PUBLISHED,
         search: str | None = None,
         skip: int = 0,
@@ -29,6 +30,8 @@ class AssessmentRepository(BaseRepository[Assessment]):
             filters.append(Assessment.skill_id == skill_id)
         if role_id is not None:
             filters.append(Assessment.role_id == role_id)
+        if created_by is not None:
+            filters.append(Assessment.created_by == created_by)
         if search:
             filters.append(Assessment.title.ilike(f"%{search.strip()}%"))
 

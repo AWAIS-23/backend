@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 from app.core.constants import AssessmentStatus, UserRole
 from app.core.security import AuthenticatedUser
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, get_optional_current_user
 from app.dependencies.services import (
     get_assessment_attempt_service,
     get_assessment_service,
@@ -55,20 +55,29 @@ async def list_assessments(
     assessment_status: AssessmentStatus | None = Query(default=None, alias="status", description="Filter by assessment status (draft, published, archived). If omitted, learners see only published."),
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser | None = Depends(get_optional_current_user),
     assessment_service: AssessmentService = Depends(get_assessment_service),
 ) -> PaginatedResponse[AssessmentPublic]:
+    user_role = current_user.role if current_user else UserRole.LEARNER
+
     # If an explicit status filter is provided, use it; otherwise default by role
     effective_status = assessment_status if assessment_status is not None else (
-        AssessmentStatus.PUBLISHED if current_user.role == UserRole.LEARNER else None
+        AssessmentStatus.PUBLISHED if user_role == UserRole.LEARNER else None
     )
+    
+    # Data isolation: Employers can only see their own assessments
+    created_by_filter = None
+    if current_user and current_user.role == UserRole.EMPLOYER:
+        created_by_filter = uuid.UUID(current_user.id)
+    
     return await assessment_service.list_assessments(
         skill_id=skill_id,
         role_id=role_id,
+        created_by=created_by_filter,
         search=search,
         page=page,
         page_size=page_size,
-        user_role=current_user.role,
+        user_role=user_role,
         status_override=effective_status,
     )
 

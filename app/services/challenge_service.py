@@ -23,35 +23,47 @@ class ChallengeService:
     async def list_challenges(
         self,
         organization_id: uuid.UUID | None = None,
+        created_by: uuid.UUID | None = None,
         search: str | None = None,
         page: int = 1,
         page_size: int = 20,
         user_role: UserRole = UserRole.LEARNER,
         status_override: ChallengeStatus | None = None,
+        skill_ids: list[uuid.UUID] | None = None,
     ) -> PaginatedResponse[ChallengePublic]:
+        # Calculate pagination offset
         skip = (page - 1) * page_size
+        # Determine status filter based on role and overrides
         if status_override is not None:
             status_filter = status_override
         elif user_role in (UserRole.EMPLOYER, UserRole.ADMIN):
             status_filter = None
         else:
             status_filter = ChallengeStatus.PUBLISHED
-
+        # Employers should only see their own challenges
+        if user_role == UserRole.EMPLOYER:
+            organization_id = None
+        # Fetch items and total count from repository with appropriate filters
         items, total = await self.challenge_repo.list_challenges(
             status=status_filter,
             organization_id=organization_id,
+            created_by=created_by,
             search=search,
+            skill_ids=skill_ids,
             skip=skip,
             limit=page_size,
         )
-        pages = math.ceil(total / page_size) if total > 0 else 1
-
+        # Convert ORM models to public schema objects
+        public_items = [ChallengePublic.model_validate(item) for item in items]
+        # Calculate total pages
+        total_pages = math.ceil(total / page_size) if page_size else 0
+        # Return a paginated response
         return PaginatedResponse[ChallengePublic](
-            items=[ChallengePublic.model_validate(item) for item in items],
+            items=public_items,
             total=total,
             page=page,
             page_size=page_size,
-            pages=pages,
+            pages=total_pages,
         )
 
     async def get_challenge_detail(
