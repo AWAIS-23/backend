@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     # CORS Settings
     CORS_ORIGINS: list[str] = Field(
-        default=["http://localhost:3000", "http://127.0.0.1:3000"],
+        default=["http://localhost:3000", "http://127.0.0.1:3000", "https://risingskills.netlify.app"],
         description="Allowed CORS origins"
     )
 

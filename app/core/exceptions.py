@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from app.core.config import settings
 from app.core.constants import ErrorCode
 
 logger = logging.getLogger("rising_skills.exceptions")
@@ -11,7 +12,7 @@ logger = logging.getLogger("rising_skills.exceptions")
 
 def cors_headers(request: Request) -> dict[str, str]:
     origin = request.headers.get("origin")
-    if origin in {"http://localhost:3000", "http://127.0.0.1:3000"}:
+    if origin in settings.CORS_ORIGINS:
         return {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
