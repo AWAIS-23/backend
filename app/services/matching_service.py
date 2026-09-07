@@ -18,6 +18,34 @@ from app.schemas.match import MatchPublic
 
 logger = logging.getLogger("rising_skills.services.matching")
 
+# Self-reported profile skills count toward skill coverage so learners can
+# see gaps immediately. Verified evidence still owns evidence_score.
+PROFICIENCY_COVERAGE = {
+    "beginner": 40.0,
+    "intermediate": 65.0,
+    "advanced": 80.0,
+    "expert": 95.0,
+}
+
+
+def _enum_value(value: object) -> str:
+    return value.value if hasattr(value, "value") else str(value or "")
+
+
+def _self_reported_coverage(evidence_item) -> float:
+    data = evidence_item.evidence_data or {}
+    proficiency = str(data.get("proficiency") or "").strip().lower()
+    return PROFICIENCY_COVERAGE.get(proficiency, 50.0)
+
+
+def _evidence_matches_required_skill(evidence_item, required_skill_id, required_skill_name: str) -> bool:
+    if evidence_item.skill_id == required_skill_id:
+        return True
+    claimed_name = ""
+    if getattr(evidence_item, "skill", None) is not None:
+        claimed_name = (evidence_item.skill.name or "").strip().lower()
+    return bool(required_skill_name and claimed_name == required_skill_name)
+
 
 class MatchingService:
     def __init__(
@@ -60,11 +88,19 @@ class MatchingService:
             weight = os.importance_weight
             total_weight += weight
             skill_name = os.skill.name if os.skill else "Unknown Skill"
-
-            # Filter for learner's VERIFIED evidence for this skill
-            verified_matches = [
+            required_name = skill_name.strip().lower()
+            skill_evidence = [
                 e for e in evidence_items
-                if e.skill_id == os.skill_id and e.status == EvidenceStatus.VERIFIED
+                if _evidence_matches_required_skill(e, os.skill_id, required_name)
+            ]
+
+            verified_matches = [
+                e for e in skill_evidence
+                if _enum_value(e.status) == EvidenceStatus.VERIFIED
+            ]
+            claimed_matches = [
+                e for e in skill_evidence
+                if _enum_value(e.source_type) == EvidenceSourceType.SELF_REPORTED
             ]
 
             if verified_matches:
@@ -72,18 +108,29 @@ class MatchingService:
                 best_score = max(e.score for e in verified_matches)
                 coverage = min(100.0, best_score)
                 matched_verified_count += 1
+            elif claimed_matches:
+                has_verified = False
+                coverage = max(_self_reported_coverage(e) for e in claimed_matches)
+                best_score = coverage
             else:
                 has_verified = False
                 coverage = 0.0
                 best_score = 0.0
 
             weighted_coverage += weight * coverage
+            skill_status = (
+                "strong" if coverage >= 80.0
+                else "weak" if coverage > 0.0
+                else "missing"
+            )
             skill_details.append({
                 "skill_id": str(os.skill_id),
                 "skill_name": skill_name,
+                "status": skill_status,
                 "weight": weight,
                 "coverage": round(coverage, 2),
                 "has_verified_evidence": has_verified,
+                "has_claimed_skill": bool(claimed_matches or verified_matches),
                 "evidence_score": round(best_score, 2),
             })
 

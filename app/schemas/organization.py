@@ -9,10 +9,20 @@ class OrganizationBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=255)
     website_url: str | None = Field(default=None, max_length=1024)
     logo_url: str | None = Field(default=None, max_length=1024)
+    location: str | None = Field(default=None, max_length=255)
+    description: str | None = None
 
 
 class OrganizationCreate(OrganizationBase):
     pass
+
+
+class OrganizationUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=255)
+    website_url: str | None = Field(default=None, max_length=1024)
+    logo_url: str | None = Field(default=None, max_length=1024)
+    location: str | None = Field(default=None, max_length=255)
+    description: str | None = None
 
 
 class OrganizationResponse(OrganizationBase):

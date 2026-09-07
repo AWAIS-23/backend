@@ -3,7 +3,7 @@ from typing import Sequence
 from fastapi import APIRouter, Depends, Query, status
 from app.core.constants import ApplicationStatus, OpportunityType, UserRole
 from app.core.security import AuthenticatedUser
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, get_optional_current_user
 from app.dependencies.roles import require_role
 from app.dependencies.services import (
     get_application_service,
@@ -41,6 +41,7 @@ async def list_opportunities(
     opportunity_type: OpportunityType | None = Query(default=None, description="Filter by opportunity type"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    current_user: AuthenticatedUser | None = Depends(get_optional_current_user),
     opportunity_service: OpportunityService = Depends(get_opportunity_service),
 ) -> PaginatedResponse[OpportunityPublic]:
     return await opportunity_service.list_opportunities(
@@ -49,7 +50,11 @@ async def list_opportunities(
         opportunity_type=opportunity_type,
         page=page,
         page_size=page_size,
-        user_role=UserRole.LEARNER,
+        user_role=(
+            current_user.role
+            if current_user and current_user.role in (UserRole.EMPLOYER, UserRole.ADMIN)
+            else UserRole.LEARNER
+        ),
     )
 
 
@@ -62,7 +67,7 @@ async def list_opportunities(
 )
 async def create_opportunity(
     payload: OpportunityCreate,
-    current_user: AuthenticatedUser = Depends(require_role([UserRole.EMPLOYER, UserRole.ADMIN])),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     opportunity_service: OpportunityService = Depends(get_opportunity_service),
 ) -> OpportunityPublic:
     created = await opportunity_service.create_opportunity(
@@ -146,6 +151,23 @@ async def close_opportunity(
         current_user=current_user,
     )
     return OpportunityPublic.model_validate(closed)
+
+
+@router.delete(
+    "/{opportunity_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete opportunity",
+    description="Deletes an opportunity. Restricted to organization managers and administrators.",
+)
+async def delete_opportunity(
+    opportunity_id: uuid.UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    opportunity_service: OpportunityService = Depends(get_opportunity_service),
+) -> None:
+    await opportunity_service.delete_opportunity(
+        opportunity_id=opportunity_id,
+        current_user=current_user,
+    )
 
 
 @router.put(

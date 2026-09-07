@@ -29,6 +29,21 @@ async def get_my_profile(
     return ProfileResponse.model_validate(profile)
 
 
+@router.get(
+    "/learners",
+    response_model=list[ProfileResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List all learners",
+    description="Returns all profiles with the learner role. Used for assigning assessments.",
+)
+async def list_learners(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    profile_service: ProfileService = Depends(get_profile_service),
+) -> list[ProfileResponse]:
+    learners = await profile_service.list_learners()
+    return [ProfileResponse.model_validate(p) for p in learners]
+
+
 @router.patch(
     "/me",
     response_model=ProfileResponse,

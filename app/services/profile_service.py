@@ -1,5 +1,6 @@
 import uuid
 import logging
+from app.core.constants import UserRole
 from app.core.exceptions import ResourceNotFoundException
 from app.models.profile import Profile
 from app.repositories.profile_repo import ProfileRepository
@@ -36,6 +37,10 @@ class ProfileService:
         if not profile:
             raise ResourceNotFoundException(resource="Profile", identifier=profile_id)
         return profile
+
+    async def list_learners(self) -> list[Profile]:
+        """List all profiles with the learner role."""
+        return await self.profile_repo.list_by_role(UserRole.LEARNER)
 
     async def update_profile(
         self,

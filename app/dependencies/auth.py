@@ -28,9 +28,23 @@ async def get_current_user(
         )
 
     token = parts[1]
+    jwks_url = settings.SUPABASE_JWKS_URL
+    if not jwks_url:
+        base = settings.SUPABASE_URL.rstrip("/")
+        jwks_url = f"{base}/auth/v1/.well-known/jwks.json"
     return verify_supabase_jwt(
         token=token,
         secret=settings.SUPABASE_JWT_SECRET,
         verify_aud=False if settings.APP_ENV == "testing" else True,
-        jwks_url=settings.jwks_url,
+        jwks_url=jwks_url,
     )
+
+
+async def get_optional_current_user(
+    authorization: str | None = Header(default=None, description="Optional bearer token"),
+    settings: Settings = Depends(get_settings),
+) -> AuthenticatedUser | None:
+    """Authenticate when a token is supplied, while allowing public requests."""
+    if not authorization:
+        return None
+    return await get_current_user(authorization=authorization, settings=settings)

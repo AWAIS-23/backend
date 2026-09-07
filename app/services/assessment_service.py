@@ -3,6 +3,7 @@ import uuid
 import logging
 from typing import Sequence
 from app.core.constants import AssessmentStatus, UserRole
+from app.core.security import AuthenticatedUser
 from app.core.exceptions import PermissionDeniedException, ResourceNotFoundException
 from app.models.assessment import Assessment
 from app.models.assessment_question import AssessmentQuestion
@@ -136,3 +137,14 @@ class AssessmentService:
         created = await self.assessment_repo.create_with_questions(assessment, question_entities)
         logger.info(f"Assessment '{created.title}' created with {len(question_entities)} questions.")
         return created
+
+    async def delete_assessment(self, assessment_id: uuid.UUID, current_user: AuthenticatedUser) -> None:
+        # Only employers can delete assessments
+        if current_user.role != UserRole.EMPLOYER:
+            raise PermissionDeniedException("Only employers can delete assessments.")
+        # Retrieve assessment to verify existence
+        assessment = await self.assessment_repo.get_by_id_with_questions(assessment_id)
+        if not assessment:
+            raise ResourceNotFoundException(resource="Assessment", identifier=assessment_id)
+        await self.assessment_repo.delete(assessment_id)
+        logger.info(f"Assessment {assessment_id} deleted by employer {current_user.id}")

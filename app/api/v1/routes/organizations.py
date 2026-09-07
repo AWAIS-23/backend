@@ -7,6 +7,7 @@ from app.dependencies.roles import require_role
 from app.dependencies.services import get_organization_service
 from app.schemas.organization import (
     OrganizationCreate,
+    OrganizationUpdate,
     OrganizationMemberResponse,
     OrganizationResponse,
 )
@@ -66,6 +67,27 @@ async def get_organization(
         org_id=organization_id,
         user_id=uuid.UUID(current_user.id),
         is_platform_admin=is_admin,
+    )
+    return OrganizationResponse.model_validate(org)
+
+
+@router.patch(
+    "/{organization_id}",
+    response_model=OrganizationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update an organization",
+)
+async def update_organization(
+    organization_id: uuid.UUID,
+    payload: OrganizationUpdate,
+    current_user: AuthenticatedUser = Depends(require_role([UserRole.EMPLOYER, UserRole.ADMIN])),
+    org_service: OrganizationService = Depends(get_organization_service),
+) -> OrganizationResponse:
+    org = await org_service.update_organization(
+        org_id=organization_id,
+        user_id=uuid.UUID(current_user.id),
+        data=payload,
+        is_platform_admin=current_user.role == UserRole.ADMIN,
     )
     return OrganizationResponse.model_validate(org)
 

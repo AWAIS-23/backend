@@ -9,6 +9,17 @@ from app.core.constants import ErrorCode
 logger = logging.getLogger("rising_skills.exceptions")
 
 
+def cors_headers(request: Request) -> dict[str, str]:
+    origin = request.headers.get("origin")
+    if origin in {"http://localhost:3000", "http://127.0.0.1:3000"}:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+    return {}
+
+
 class AppException(Exception):
     """Base application exception with machine-readable error codes."""
 
@@ -112,12 +123,14 @@ def format_error_response(
 
 
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
-    return format_error_response(
+    response = format_error_response(
         status_code=exc.status_code,
         error_code=exc.error_code.value if hasattr(exc.error_code, "value") else str(exc.error_code),
         message=exc.message,
         details=exc.details,
     )
+    response.headers.update(cors_headers(request))
+    return response
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -130,19 +143,23 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "type": err.get("type"),
         })
 
-    return format_error_response(
+    response = format_error_response(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         error_code=ErrorCode.VALIDATION_ERROR.value,
         message="Request validation failed.",
         details=errors,
     )
+    response.headers.update(cors_headers(request))
+    return response
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception(f"Unhandled exception on path {request.url.path}: {str(exc)}")
-    return format_error_response(
+    response = format_error_response(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         error_code=ErrorCode.INTERNAL_SERVER_ERROR.value,
         message="An unexpected internal server error occurred. Please contact support.",
         details={},
     )
+    response.headers.update(cors_headers(request))
+    return response

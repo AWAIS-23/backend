@@ -16,9 +16,13 @@ class MatchingRepository(BaseRepository[Match]):
         opportunity_id: uuid.UUID,
         profile_id: uuid.UUID,
     ) -> Match | None:
-        stmt = select(Match).where(
-            Match.opportunity_id == opportunity_id,
-            Match.profile_id == profile_id,
+        stmt = (
+            select(Match)
+            .options(selectinload(Match.opportunity))
+            .where(
+                Match.opportunity_id == opportunity_id,
+                Match.profile_id == profile_id,
+            )
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -40,9 +44,16 @@ class MatchingRepository(BaseRepository[Match]):
             existing.evidence_score = evidence_score
             existing.experience_score = experience_score
             existing.breakdown = breakdown
-            await self.session.flush()
-            await self.session.refresh(existing)
-            return existing
+            try:
+                await self.session.flush()
+                await self.session.refresh(existing)
+                return existing
+            except Exception:
+                await self.session.rollback()
+                existing = await self.get_match(opportunity_id, profile_id)
+                if existing:
+                    return existing
+                raise
 
         match = Match(
             opportunity_id=opportunity_id,
@@ -54,9 +65,23 @@ class MatchingRepository(BaseRepository[Match]):
             breakdown=breakdown,
         )
         self.session.add(match)
-        await self.session.flush()
-        await self.session.refresh(match)
-        return match
+        try:
+            await self.session.flush()
+            await self.session.refresh(match)
+            return match
+        except Exception:
+            await self.session.rollback()
+            existing = await self.get_match(opportunity_id, profile_id)
+            if existing:
+                existing.overall_score = overall_score
+                existing.skill_score = skill_score
+                existing.evidence_score = evidence_score
+                existing.experience_score = experience_score
+                existing.breakdown = breakdown
+                await self.session.flush()
+                await self.session.refresh(existing)
+                return existing
+            raise
 
     async def list_matches_for_opportunity(
         self,

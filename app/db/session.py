@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 from app.core.config import get_settings
 
 logger = logging.getLogger("rising_skills.db")
@@ -24,8 +25,12 @@ def get_engine() -> AsyncEngine:
             "future": True,
         }
         
+        # Supabase's session pooler has a small connection limit. A persistent
+        # application pool can exhaust it during reloads or multiple workers.
+        if "pooler.supabase.com" in settings.DATABASE_URL:
+            engine_kwargs["poolclass"] = NullPool
         # SQLite vs PostgreSQL pool configuration
-        if "sqlite" in settings.DATABASE_URL:
+        elif "sqlite" in settings.DATABASE_URL:
             # SQLite for tests / lightweight environments
             pass
         else:

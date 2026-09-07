@@ -165,3 +165,48 @@ async def test_unverified_evidence_produces_zero_coverage(
     assert data["evidence_score"] == 0.0
     assert data["overall_score"] == 0.0
     assert data["breakdown"]["matched_skills"] == 0
+
+
+@pytest.mark.asyncio
+async def test_self_reported_skills_count_toward_skill_coverage(
+    async_client: AsyncClient,
+    learner_token_2: str,
+    seed_matching_dataset,
+):
+    """Profile skill claims are compared with job requirements even before verification."""
+    opp_id = "88888888-9999-0000-1111-222233334444"
+    profile_id = uuid.UUID("44444444-4444-4444-4444-444444444444")
+    py_skill_id = uuid.UUID("11110000-1111-2222-3333-444455556666")
+
+    async with TestingSessionLocal() as session:
+        session.add(
+            Evidence(
+                profile_id=profile_id,
+                skill_id=py_skill_id,
+                source_type=EvidenceSourceType.SELF_REPORTED,
+                source_id=profile_id,
+                score=0.0,
+                evidence_data={"self_reported": True, "proficiency": "Intermediate"},
+                status=EvidenceStatus.UNVERIFIED,
+            )
+        )
+        await session.commit()
+
+    response = await async_client.post(
+        f"/api/v1/matches/opportunities/{opp_id}/calculate",
+        headers={"Authorization": f"Bearer {learner_token_2}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    python_detail = next(
+        skill for skill in data["breakdown"]["skill_details"] if skill["skill_name"] == "Python"
+    )
+    missing = [skill["skill_name"] for skill in data["breakdown"]["skill_details"] if skill["status"] == "missing"]
+
+    assert python_detail["status"] == "weak"
+    assert python_detail["coverage"] == 65.0
+    assert python_detail["has_verified_evidence"] is False
+    assert data["evidence_score"] == 0.0
+    assert "FastAPI" in missing
+    assert "PostgreSQL" in missing

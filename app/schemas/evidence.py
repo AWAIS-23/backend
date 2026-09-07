@@ -11,6 +11,11 @@ class SelfReportClaimCreate(BaseModel):
     notes: str | None = Field(default=None, max_length=2000, description="Optional supporting notes")
 
 
+class SelfReportClaimUpdate(BaseModel):
+    proficiency: str | None = Field(default=None, max_length=50)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
 class EvidencePublic(BaseModel):
     id: uuid.UUID
     profile_id: uuid.UUID

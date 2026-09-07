@@ -10,6 +10,7 @@ from app.core.exceptions import (
 from app.core.security import AuthenticatedUser
 from app.models.opportunity import Opportunity
 from app.repositories.opportunity_repo import OpportunityRepository
+from app.repositories.organization_repo import OrganizationRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.opportunity import (
     OpportunityCreate,
@@ -24,8 +25,13 @@ logger = logging.getLogger("rising_skills.services.opportunity")
 
 
 class OpportunityService:
-    def __init__(self, opportunity_repo: OpportunityRepository):
+    def __init__(
+        self,
+        opportunity_repo: OpportunityRepository,
+        organization_repo: OrganizationRepository,
+    ):
         self.opportunity_repo = opportunity_repo
+        self.organization_repo = organization_repo
 
     async def list_opportunities(
         self,
@@ -50,8 +56,15 @@ class OpportunityService:
         )
         pages = math.ceil(total / page_size) if total > 0 else 1
 
+        public_items = []
+        for item in items:
+            public_item = OpportunityPublic.model_validate(item)
+            public_item.organization_name = item.organization.name if item.organization else None
+            public_item.organization_location = item.organization.location if item.organization else None
+            public_items.append(public_item)
+
         return PaginatedResponse[OpportunityPublic](
-            items=[OpportunityPublic.model_validate(item) for item in items],
+            items=public_items,
             total=total,
             page=page,
             page_size=page_size,
@@ -81,6 +94,12 @@ class OpportunityService:
             )
 
         detail = OpportunityDetailPublic.model_validate(opportunity)
+        detail.organization_name = (
+            opportunity.organization.name if opportunity.organization else None
+        )
+        detail.organization_location = (
+            opportunity.organization.location if opportunity.organization else None
+        )
         detail.skills = skills_public
         return detail
 
@@ -89,7 +108,7 @@ class OpportunityService:
         current_user: AuthenticatedUser,
         data: OpportunityCreate,
     ) -> Opportunity:
-        self._verify_org_permission(current_user, data.organization_id)
+        await self._verify_org_permission(current_user, data.organization_id)
 
         opportunity = Opportunity(
             organization_id=data.organization_id,
@@ -118,7 +137,7 @@ class OpportunityService:
         if not opportunity:
             raise ResourceNotFoundException(resource="Opportunity", identifier=opportunity_id)
 
-        self._verify_org_permission(current_user, opportunity.organization_id)
+        await self._verify_org_permission(current_user, opportunity.organization_id)
 
         if data.title is not None:
             opportunity.title = data.title.strip()
@@ -146,7 +165,7 @@ class OpportunityService:
         if not opportunity:
             raise ResourceNotFoundException(resource="Opportunity", identifier=opportunity_id)
 
-        self._verify_org_permission(current_user, opportunity.organization_id)
+        await self._verify_org_permission(current_user, opportunity.organization_id)
 
         opportunity.status = OpportunityStatus.PUBLISHED
         opportunity.published_at = datetime.now(timezone.utc)
@@ -164,13 +183,25 @@ class OpportunityService:
         if not opportunity:
             raise ResourceNotFoundException(resource="Opportunity", identifier=opportunity_id)
 
-        self._verify_org_permission(current_user, opportunity.organization_id)
+        await self._verify_org_permission(current_user, opportunity.organization_id)
 
         opportunity.status = OpportunityStatus.CLOSED
         await self.opportunity_repo.session.flush()
         await self.opportunity_repo.session.refresh(opportunity)
         logger.info(f"Opportunity '{opportunity.id}' closed.")
         return opportunity
+
+    async def delete_opportunity(
+        self,
+        opportunity_id: uuid.UUID,
+        current_user: AuthenticatedUser,
+    ) -> None:
+        opportunity = await self.opportunity_repo.get_by_id(opportunity_id)
+        if not opportunity:
+            raise ResourceNotFoundException(resource="Opportunity", identifier=opportunity_id)
+
+        await self._verify_org_permission(current_user, opportunity.organization_id)
+        await self.opportunity_repo.delete(opportunity)
 
     async def set_opportunity_skills(
         self,
@@ -182,13 +213,13 @@ class OpportunityService:
         if not opportunity:
             raise ResourceNotFoundException(resource="Opportunity", identifier=opportunity_id)
 
-        self._verify_org_permission(current_user, opportunity.organization_id)
+        await self._verify_org_permission(current_user, opportunity.organization_id)
 
         skill_items = [(s.skill_id, s.importance_weight) for s in skills]
         await self.opportunity_repo.set_skills(opportunity_id, skill_items)
         return await self.get_opportunity_detail(opportunity_id, user_role=UserRole.EMPLOYER)
 
-    def _verify_org_permission(
+    async def _verify_org_permission(
         self,
         current_user: AuthenticatedUser,
         organization_id: uuid.UUID,
@@ -196,7 +227,14 @@ class OpportunityService:
         if current_user.role == UserRole.ADMIN:
             return
 
-        org_role = current_user.org_roles.get(str(organization_id))
         allowed_roles = [OrgRole.OWNER, OrgRole.ADMIN, OrgRole.RECRUITER, OrgRole.EVALUATOR]
-        if current_user.role != UserRole.EMPLOYER or org_role not in allowed_roles:
+        org_role = current_user.org_roles.get(str(organization_id))
+        if org_role in allowed_roles:
+            return
+
+        member = await self.organization_repo.get_member(
+            organization_id=organization_id,
+            profile_id=uuid.UUID(current_user.id),
+        )
+        if not member or member.org_role not in allowed_roles:
             raise PermissionDeniedException(f"You lack management permissions for organization '{organization_id}'.")

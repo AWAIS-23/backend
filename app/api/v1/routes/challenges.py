@@ -1,9 +1,9 @@
 import uuid
 from typing import Sequence
 from fastapi import APIRouter, Depends, Query, status
-from app.core.constants import UserRole
+from app.core.constants import ChallengeStatus, UserRole
 from app.core.security import AuthenticatedUser
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, get_optional_current_user
 from app.dependencies.roles import require_role
 from app.dependencies.services import (
     get_challenge_service,
@@ -32,16 +32,20 @@ router = APIRouter(prefix="/challenges", tags=["Practical Challenges"])
 async def list_challenges(
     organization_id: uuid.UUID | None = Query(default=None, description="Filter by employer organization ID"),
     search: str | None = Query(default=None, description="Search keyword in challenge title"),
+    challenge_status: ChallengeStatus | None = Query(default=None, alias="status", description="Filter by challenge status"),
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    current_user: AuthenticatedUser | None = Depends(get_optional_current_user),
     challenge_service: ChallengeService = Depends(get_challenge_service),
 ) -> PaginatedResponse[ChallengePublic]:
+    user_role = current_user.role if current_user else UserRole.LEARNER
     return await challenge_service.list_challenges(
         organization_id=organization_id,
         search=search,
         page=page,
         page_size=page_size,
-        user_role=UserRole.LEARNER,
+        user_role=user_role,
+        status_override=challenge_status,
     )
 
 

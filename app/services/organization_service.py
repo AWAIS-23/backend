@@ -6,7 +6,7 @@ from app.core.exceptions import PermissionDeniedException, ResourceNotFoundExcep
 from app.models.organization import Organization, OrganizationMember
 from app.repositories.organization_repo import OrganizationRepository
 from app.repositories.profile_repo import ProfileRepository
-from app.schemas.organization import OrganizationCreate
+from app.schemas.organization import OrganizationCreate, OrganizationUpdate
 
 logger = logging.getLogger("rising_skills.services.organization")
 
@@ -35,6 +35,8 @@ class OrganizationService:
             name=data.name.strip(),
             website_url=data.website_url,
             logo_url=data.logo_url,
+            location=data.location,
+            description=data.description,
         )
         created_org = await self.org_repo.create(org)
 
@@ -46,6 +48,25 @@ class OrganizationService:
         )
         logger.info(f"Organization '{created_org.name}' created by user '{creator_id}'.")
         return created_org
+
+    async def update_organization(
+        self,
+        org_id: uuid.UUID,
+        user_id: uuid.UUID,
+        data: OrganizationUpdate,
+        is_platform_admin: bool = False,
+    ) -> Organization:
+        org = await self.get_organization(org_id, user_id, is_platform_admin)
+        if not is_platform_admin:
+            member = await self.org_repo.get_member(organization_id=org_id, profile_id=user_id)
+            if not member or member.org_role not in (OrgRole.OWNER, OrgRole.ADMIN):
+                raise PermissionDeniedException("Only organization owners and admins can update this organization.")
+
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(org, field, value.strip() if isinstance(value, str) and field in {"name", "location"} else value)
+        await self.org_repo.session.flush()
+        await self.org_repo.session.refresh(org)
+        return org
 
     async def get_organization(
         self,

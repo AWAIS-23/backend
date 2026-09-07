@@ -27,10 +27,15 @@ class ChallengeService:
         page: int = 1,
         page_size: int = 20,
         user_role: UserRole = UserRole.LEARNER,
+        status_override: ChallengeStatus | None = None,
     ) -> PaginatedResponse[ChallengePublic]:
         skip = (page - 1) * page_size
-        # Learners only see PUBLISHED challenges; Admins/Employers can see all when filtered appropriately
-        status_filter = ChallengeStatus.PUBLISHED if user_role == UserRole.LEARNER else None
+        if status_override is not None:
+            status_filter = status_override
+        elif user_role in (UserRole.EMPLOYER, UserRole.ADMIN):
+            status_filter = None
+        else:
+            status_filter = ChallengeStatus.PUBLISHED
 
         items, total = await self.challenge_repo.list_challenges(
             status=status_filter,

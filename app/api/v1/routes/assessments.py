@@ -7,7 +7,13 @@ from app.dependencies.services import (
     get_assessment_attempt_service,
     get_assessment_service,
 )
-from app.schemas.assessment import AssessmentCreate, AssessmentDetailPublic, AssessmentPublic
+from app.schemas.assessment import (
+    AssessmentPublic,
+    AssessmentDetailPublic,
+    AssessmentCreate,
+    AssessmentQuestionPublic,
+    AssessmentQuestionCreate,
+)
 from app.schemas.assessment_attempt import AttemptStartResponse
 from app.schemas.common import PaginatedResponse
 from app.services.assessment_attempt_service import AssessmentAttemptService
@@ -100,3 +106,37 @@ async def start_assessment_attempt(
         assessment_id=assessment_id,
         profile_id=uuid.UUID(current_user.id),
     )
+
+# Delete assessment endpoint
+@router.post(
+    "/questions",
+    response_model=AssessmentQuestionPublic,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a question to Question Bank",
+    description="Creates a question in the employer's Question Bank (draft assessment).",
+)
+async def add_question(
+    data: AssessmentQuestionCreate,
+    token: AuthenticatedUser = Depends(get_current_user),
+    assessment_service: AssessmentService = Depends(get_assessment_service),
+) -> AssessmentQuestionPublic:
+    # Using a default bank title; could be customized later
+    bank_title = f"Question Bank – {token.id}"  # token has id attribute
+    return await assessment_service.add_question_to_bank(
+        creator_id=uuid.UUID(token.id),
+        bank_title=bank_title,
+        question_data=data,
+    )
+
+@router.delete(
+    "/{assessment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete an assessment",
+    description="Deletes an assessment. Only employer users can delete their own assessments.",
+)
+async def delete_assessment(
+    assessment_id: uuid.UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    assessment_service: AssessmentService = Depends(get_assessment_service),
+) -> None:
+    await assessment_service.delete_assessment(assessment_id, current_user)

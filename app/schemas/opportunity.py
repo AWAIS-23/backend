@@ -40,6 +40,8 @@ class OpportunityUpdate(BaseModel):
 class OpportunityPublic(BaseModel):
     id: uuid.UUID
     organization_id: uuid.UUID
+    organization_name: str | None = None
+    organization_location: str | None = None
     title: str
     description: str | None = None
     opportunity_type: OpportunityType

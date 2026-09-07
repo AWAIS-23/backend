@@ -46,6 +46,20 @@ class EvidenceRepository(BaseRepository[Evidence]):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def find_self_reported(
+        self,
+        profile_id: uuid.UUID,
+        skill_id: uuid.UUID,
+    ) -> Evidence | None:
+        """Find an existing self-reported evidence claim for a skill."""
+        stmt = select(Evidence).where(
+            Evidence.profile_id == profile_id,
+            Evidence.skill_id == skill_id,
+            Evidence.source_type == "self_reported",
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def find_by_source(
         self,
         source_type: str,
@@ -56,20 +70,6 @@ class EvidenceRepository(BaseRepository[Evidence]):
             Evidence.source_type == source_type,
             Evidence.source_id == source_id,
             Evidence.profile_id == profile_id,
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def find_self_reported(
-        self,
-        profile_id: uuid.UUID,
-        skill_id: uuid.UUID,
-    ) -> Evidence | None:
-        from app.core.constants import EvidenceSourceType
-        stmt = select(Evidence).where(
-            Evidence.profile_id == profile_id,
-            Evidence.skill_id == skill_id,
-            Evidence.source_type == EvidenceSourceType.SELF_REPORTED,
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()

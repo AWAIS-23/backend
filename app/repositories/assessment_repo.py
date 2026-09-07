@@ -72,3 +72,47 @@ class AssessmentRepository(BaseRepository[Assessment]):
         await self.session.flush()
         await self.session.refresh(assessment)
         return assessment
+
+    async def delete(self, assessment_id: uuid.UUID) -> None:
+        stmt = select(Assessment).where(Assessment.id == assessment_id)
+        result = await self.session.execute(stmt)
+        assessment = result.scalar_one_or_none()
+        if not assessment:
+            return  # Service will raise not found
+        await self.session.delete(assessment)
+        await self.session.commit()
+
+    # New helper methods for Question Bank
+    async def get_or_create_question_bank(self, owner_id: uuid.UUID, title: str, skill_id: uuid.UUID) -> Assessment:
+        stmt = select(Assessment).where(
+            Assessment.created_by == owner_id,
+            Assessment.title == title,
+            Assessment.status == AssessmentStatus.DRAFT,
+        )
+        result = await self.session.execute(stmt)
+        bank = result.scalar_one_or_none()
+        if bank:
+            return bank
+        # Create new draft assessment to serve as question bank
+        bank = Assessment(
+            title=title,
+            description=None,
+            skill_id=skill_id,
+            role_id=None,
+            difficulty=AssessmentStatus.PUBLISHED,  # placeholder
+            duration_seconds=0,
+            passing_score=0,
+            status=AssessmentStatus.DRAFT,
+            created_by=owner_id,
+        )
+        self.session.add(bank)
+        await self.session.flush()
+        await self.session.refresh(bank)
+        return bank
+
+    async def add_question(self, assessment_id: uuid.UUID, question: AssessmentQuestion) -> AssessmentQuestion:
+        question.assessment_id = assessment_id
+        self.session.add(question)
+        await self.session.flush()
+        await self.session.refresh(question)
+        return question

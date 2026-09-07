@@ -4,7 +4,7 @@ from app.core.security import AuthenticatedUser
 from app.dependencies.auth import get_current_user
 from app.dependencies.services import get_evidence_service
 from app.schemas.common import PaginatedResponse
-from app.schemas.evidence import EvidencePublic, SelfReportClaimCreate
+from app.schemas.evidence import EvidencePublic, SelfReportClaimCreate, SelfReportClaimUpdate
 from app.services.evidence_service import EvidenceService
 
 router = APIRouter(prefix="/evidence", tags=["Skill Evidence"])
@@ -29,6 +29,42 @@ async def self_report_claim(
         notes=data.notes,
     )
     return EvidencePublic.model_validate(evidence)
+
+
+@router.patch(
+    "/{evidence_id}",
+    response_model=EvidencePublic,
+    status_code=status.HTTP_200_OK,
+    summary="Update a self-reported skill",
+)
+async def update_self_reported_claim(
+    evidence_id: uuid.UUID,
+    data: SelfReportClaimUpdate,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    evidence_service: EvidenceService = Depends(get_evidence_service),
+) -> EvidencePublic:
+    evidence = await evidence_service.update_self_reported_claim(
+        evidence_id=evidence_id,
+        profile_id=uuid.UUID(current_user.id),
+        data=data,
+    )
+    return EvidencePublic.model_validate(evidence)
+
+
+@router.delete(
+    "/{evidence_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a self-reported skill",
+)
+async def delete_self_reported_claim(
+    evidence_id: uuid.UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    evidence_service: EvidenceService = Depends(get_evidence_service),
+) -> None:
+    await evidence_service.delete_self_reported_claim(
+        evidence_id=evidence_id,
+        profile_id=uuid.UUID(current_user.id),
+    )
 
 
 @router.get(

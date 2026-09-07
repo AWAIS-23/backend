@@ -37,9 +37,13 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = "your-supabase-anon-key"
     SUPABASE_SERVICE_ROLE_KEY: str = "your-supabase-service-role-key"
     SUPABASE_JWT_SECRET: str = "your-supabase-jwt-secret"
-    # JWKS endpoint for asymmetric (ES256) token verification.
-    # Derived from SUPABASE_URL at startup if not explicitly set.
     SUPABASE_JWKS_URL: str | None = None
+
+    # AI Feature Configuration
+    AI_ENABLED: bool = Field(
+        default=True,
+        description="Master toggle for AI-powered features. When disabled, AI endpoints degrade gracefully.",
+    )
 
     # AI Configuration (Groq LPU Inference)
     GROQ_API_KEY: str | None = None
@@ -65,14 +69,6 @@ class Settings(BaseSettings):
                     pass
             return [i.strip() for i in v.split(",") if i.strip()]
         return v
-
-    @property
-    def jwks_url(self) -> str:
-        """JWKS endpoint for Supabase asymmetric (ES256) token verification."""
-        if self.SUPABASE_JWKS_URL:
-            return self.SUPABASE_JWKS_URL
-        base = self.SUPABASE_URL.rstrip("/")
-        return f"{base}/auth/v1/.well-known/jwks.json"
 
     model_config = SettingsConfigDict(
         env_file=".env",

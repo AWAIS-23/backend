@@ -7,7 +7,7 @@ from app.core.security import AuthenticatedUser
 from app.models.evidence import Evidence
 from app.repositories.evidence_repo import EvidenceRepository
 from app.schemas.common import PaginatedResponse
-from app.schemas.evidence import EvidencePublic
+from app.schemas.evidence import EvidencePublic, SelfReportClaimUpdate
 
 logger = logging.getLogger("rising_skills.services.evidence")
 
@@ -76,17 +76,10 @@ class EvidenceService:
         not derived from any assessment or submission). Status starts as UNVERIFIED
         and can only move forward through the human verification workflow.
         """
-        existing = await self.evidence_repo.find_self_reported(
-            profile_id=profile_id,
-            skill_id=skill_id,
-        )
-        if existing:
-            return existing
-
         evidence = Evidence(
             profile_id=profile_id,
             skill_id=skill_id,
-            source_type=EvidenceSourceType.SELF_REPORTED,
+            source_type=EvidenceSourceType.SELF_REPORTED.value,
             source_id=profile_id,
             score=0.0,
             evidence_data={
@@ -94,11 +87,44 @@ class EvidenceService:
                 "proficiency": proficiency,
                 "notes": notes,
             },
-            status=EvidenceStatus.UNVERIFIED,
+            status=EvidenceStatus.UNVERIFIED.value,
         )
         created = await self.evidence_repo.create(evidence)
         logger.info(f"Self-reported skill claim '{created.id}' created for user '{profile_id}' (Skill: '{skill_id}').")
         return created
+
+    async def update_self_reported_claim(
+        self,
+        evidence_id: uuid.UUID,
+        profile_id: uuid.UUID,
+        data: SelfReportClaimUpdate,
+    ) -> Evidence:
+        evidence = await self.evidence_repo.get_by_id(evidence_id)
+        if not evidence or evidence.profile_id != profile_id:
+            raise ResourceNotFoundException(resource="Evidence", identifier=evidence_id)
+        if evidence.source_type != EvidenceSourceType.SELF_REPORTED.value:
+            raise PermissionDeniedException("Only self-reported skills can be edited.")
+
+        evidence.evidence_data = {
+            **(evidence.evidence_data or {}),
+            "proficiency": data.proficiency,
+            "notes": data.notes,
+        }
+        await self.evidence_repo.session.flush()
+        await self.evidence_repo.session.refresh(evidence)
+        return evidence
+
+    async def delete_self_reported_claim(
+        self,
+        evidence_id: uuid.UUID,
+        profile_id: uuid.UUID,
+    ) -> None:
+        evidence = await self.evidence_repo.get_by_id(evidence_id)
+        if not evidence or evidence.profile_id != profile_id:
+            raise ResourceNotFoundException(resource="Evidence", identifier=evidence_id)
+        if evidence.source_type != EvidenceSourceType.SELF_REPORTED.value:
+            raise PermissionDeniedException("Only self-reported skills can be deleted.")
+        await self.evidence_repo.delete(evidence)
 
     async def create_assessment_evidence(
         self,

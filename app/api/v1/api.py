@@ -1,10 +1,12 @@
 from fastapi import APIRouter
 from app.api.v1.routes import (
+    ai_insights,
     analytics,
     applications,
     assessments,
     attempts,
     challenges,
+    education,
     evidence,
     experiences,
     health,
@@ -30,6 +32,7 @@ api_router.include_router(roles.router)
 api_router.include_router(assessments.router)
 api_router.include_router(attempts.router)
 api_router.include_router(challenges.router)
+api_router.include_router(education.router)
 api_router.include_router(submissions.router)
 api_router.include_router(evidence.router)
 api_router.include_router(verifications.router)
@@ -39,3 +42,4 @@ api_router.include_router(matches.router)
 api_router.include_router(experiences.router)
 api_router.include_router(notifications.router)
 api_router.include_router(analytics.router)
+api_router.include_router(ai_insights.router)
